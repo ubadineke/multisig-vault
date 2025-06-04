@@ -83,7 +83,7 @@ describe("multisig-impl", () => {
 
   it("creates a vault", async () => {
     await program.methods
-      .initializeVault([guardian1.publicKey, guardian2.publicKey, guardian3.publicKey], 3)
+      .initializeVault([guardian1.publicKey, guardian2.publicKey, guardian3.publicKey], 2)
       .accounts({
         vault: vaultPda,
         user: vaultOwner.publicKey,
@@ -96,7 +96,7 @@ describe("multisig-impl", () => {
     const vault = await program.account.vault.fetch(vaultPda);
     assert.equal(vault.owner.toString(), vaultOwner.publicKey.toString());
     assert.equal(vault.guardians.length, 3);
-    assert.equal(vault.threshold, 3);
+    assert.equal(vault.threshold, 2);
     assert.equal(vault.balance.toNumber(), 0);
   });
 
@@ -153,6 +153,8 @@ describe("multisig-impl", () => {
       (LAMPORTS_PER_SOL - withdrawAmount.toNumber()).toString()
     );
 
+    console.log(`Existing Vault owner: ${vault.owner}`);
+
     // Check recipient received funds
     const newRecipientBalance = await provider.connection.getBalance(recipient.publicKey);
     assert.isAtLeast(
@@ -195,9 +197,14 @@ describe("multisig-impl", () => {
       .rpc();
 
     const request = await program.account.recoveryRequest.fetch(recoveryRequestPda);
+
+    console.log(`State: ${request.executed}`);
+    console.log(`Proposed New owner: ${request.newOwner}}`);
+    const vault = await program.account.vault.fetch(vaultPda);
+    assert.strictEqual(vault.owner.toString(), request.newOwner.toString());
     assert.isTrue(request.signers[1]); // guardian2 approved
     assert.isFalse(request.signers[2]); // guardian3 pending
-    assert.isFalse(request.executed);
+    assert.isTrue(request.executed);
   });
 
   it("does not execute after recovery has concluded", async () => {
