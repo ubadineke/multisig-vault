@@ -80,8 +80,11 @@ impl Withdraw<'_> {
 
         //GENERATE SIGNER SEEDS
         let vault_key = vault.key();
-        let vault_treasury_signer_seeds: &[&[&[u8]]] =
-            &[&[b"vault-treasury", vault_key.as_ref(), &[ctx.bumps.vault_treasury]]];
+        let vault_treasury_signer_seeds: &[&[&[u8]]] = &[&[
+            b"vault-treasury",
+            vault_key.as_ref(),
+            &[ctx.bumps.vault_treasury],
+        ]];
 
         invoke_signed(
             //Transfer sol to user

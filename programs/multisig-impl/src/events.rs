@@ -19,3 +19,25 @@ pub struct WithdrawalEvent {
     pub spent_in_epoch: u64,
     pub timestamp: i64,
 }
+
+#[event]
+pub struct RecoveryInitiated {
+    pub vault: Pubkey,
+    pub initiator: Pubkey,
+    pub proposed_new_owner: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct RecoveryApproved {
+    pub vault: Pubkey,
+    pub guardian: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct RecoveryExecuted {
+    pub vault: Pubkey,
+    pub new_owner: Pubkey,
+    pub timestamp: i64,
+}

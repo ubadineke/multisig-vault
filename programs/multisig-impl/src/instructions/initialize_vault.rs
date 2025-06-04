@@ -47,7 +47,7 @@ impl InitializeVault<'_> {
         vault.epoch = clock.epoch;
         vault.spent_in_epoch = 0;
         vault.guardians = guardians;
-        vault.guardians_threshold = recovery_threshold;
+        vault.threshold = recovery_threshold;
         vault.bump = ctx.bumps.vault;
         vault.treasury = ctx.accounts.vault_treasury.key();
         Ok(())

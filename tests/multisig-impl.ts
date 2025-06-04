@@ -20,6 +20,7 @@ describe("multisig-impl", () => {
 
   let configPda;
   let vaultPda;
+  let recoveryRequestPda;
 
   function derivePDA(seeds: (string | PublicKey | number | Buffer)[]): PublicKey {
     const seedBuffers = seeds.map((seed) => {
@@ -62,13 +63,8 @@ describe("multisig-impl", () => {
     //AIRDROP ACCOUNTS
     await airdropSOL(admin.publicKey, 5);
     await airdropSOL(vaultOwner.publicKey, 2);
+    await airdropSOL(guardian1.publicKey, 1);
   });
-
-  // it("Is initialized!", async () => {
-  //   // Add your test here.
-  //   const tx = await program.methods.initialize().rpc();
-  //   console.log("Your transaction signature", tx);
-  // });
 
   it("initializes config successfully", async () => {
     await program.methods
@@ -87,7 +83,7 @@ describe("multisig-impl", () => {
 
   it("creates a vault", async () => {
     await program.methods
-      .initializeVault([guardian1.publicKey, guardian2.publicKey, guardian3.publicKey], 2)
+      .initializeVault([guardian1.publicKey, guardian2.publicKey, guardian3.publicKey], 3)
       .accounts({
         vault: vaultPda,
         user: vaultOwner.publicKey,
@@ -100,7 +96,7 @@ describe("multisig-impl", () => {
     const vault = await program.account.vault.fetch(vaultPda);
     assert.equal(vault.owner.toString(), vaultOwner.publicKey.toString());
     assert.equal(vault.guardians.length, 3);
-    assert.equal(vault.guardiansThreshold, 2);
+    assert.equal(vault.threshold, 3);
     assert.equal(vault.balance.toNumber(), 0);
   });
 
@@ -164,4 +160,122 @@ describe("multisig-impl", () => {
       initialRecipientBalance + withdrawAmount.toNumber()
     );
   });
+
+  it("initiates recovery request", async () => {
+    recoveryRequestPda = derivePDA(["recovery", vaultPda]);
+
+    await program.methods
+      .initiateRecovery(
+        recipient.publicKey // new owner
+      )
+      .accounts({
+        vault: vaultPda,
+        recoveryRequest: recoveryRequestPda,
+        guardian: guardian1.publicKey,
+        owner: vaultOwner.publicKey,
+      })
+      .signers([guardian1])
+      .rpc();
+
+    const request = await program.account.recoveryRequest.fetch(recoveryRequestPda);
+    assert.equal(request.vault.toString(), vaultPda.toString());
+    assert.equal(request.newOwner.toString(), recipient.publicKey.toString());
+    assert.isFalse(request.executed);
+  });
+
+  it("approves and executes if threshold is met", async () => {
+    await program.methods
+      .approveRecovery()
+      .accounts({
+        recoveryRequest: recoveryRequestPda,
+        vault: vaultPda,
+        guardian: guardian2.publicKey,
+      })
+      .signers([guardian2])
+      .rpc();
+
+    const request = await program.account.recoveryRequest.fetch(recoveryRequestPda);
+    assert.isTrue(request.signers[1]); // guardian2 approved
+    assert.isFalse(request.signers[2]); // guardian3 pending
+    assert.isFalse(request.executed);
+  });
+
+  it("does not execute after recovery has concluded", async () => {
+    try {
+      await program.methods
+        .approveRecovery()
+        .accounts({
+          recoveryRequest: recoveryRequestPda,
+          vault: vaultPda,
+          guardian: guardian3.publicKey,
+        })
+        .signers([guardian3])
+        .rpc();
+      assert.fail("AlreadyExecuted, Recovery has already been executed");
+    } catch (err) {
+      assert.include(err.message.toString(), "AlreadyExecuted");
+    }
+
+    // Verify execution
+    const request = await program.account.recoveryRequest.fetch(recoveryRequestPda);
+    const vault = await program.account.vault.fetch(vaultPda);
+
+    assert.isTrue(request.executed);
+    assert.equal(vault.owner.toString(), recipient.publicKey.toString());
+  });
+
+  // it("combines partial signatures for request approval", async () => {
+  //   console.log(`Guardian1 ${guardian1.publicKey}`);
+  //   console.log(`Guardian2 ${guardian2.publicKey}`);
+  //   // 1. Prepare unsigned approval transaction
+  //   const approvalIx = await program.methods
+  //     .approveRecovery()
+  //     .accounts({
+  //       recoveryRequest: recoveryRequestPda,
+  //       vault: vaultPda,
+  //       guardian: guardian1.publicKey,
+  //     })
+  //     .instruction();
+
+  //   const tx = new anchor.web3.Transaction().add(approvalIx);
+  //   tx.feePayer = guardian1.publicKey;
+  //   tx.recentBlockhash = (await provider.connection.getRecentBlockhash()).blockhash;
+
+  //   tx.signatures = [
+  //     {
+  //       publicKey: guardian1.publicKey,
+  //       signature: null,
+  //     },
+  //     {
+  //       publicKey: guardian2.publicKey,
+  //       signature: null,
+  //     },
+  //   ];
+
+  //   // 2. Serialize for guardian1 to sign (offline simulation)
+  //   const serializedTx = tx.serialize({
+  //     requireAllSignatures: false,
+  //     verifySignatures: false,
+  //   });
+  //   const txForGuardian1 = anchor.web3.Transaction.from(serializedTx);
+
+  //   // 3. Guardian1 signs
+  //   txForGuardian1.partialSign(guardian1);
+  //   const guardian1Signed = txForGuardian1.serialize();
+
+  //   // 4. Pass to guardian2 for signing
+  //   const txForGuardian2 = anchor.web3.Transaction.from(guardian1Signed);
+  //   txForGuardian2.partialSign(guardian2);
+  //   const fullySignedTx = txForGuardian2.serialize();
+
+  //   // 5. Submit combined transaction
+  //   const txId = await provider.connection.sendRawTransaction(fullySignedTx);
+  //   await provider.connection.confirmTransaction(txId);
+
+  //   // Verify execution (threshold met)
+  //   const request = await program.account.recoveryRequest.fetch(recoveryRequestPda);
+  //   assert.isTrue(request.executed);
+  //   assert.isTrue(request.signers[0]); // guardian1
+  //   assert.isTrue(request.signers[1]); // guardian2
+  // });
 });

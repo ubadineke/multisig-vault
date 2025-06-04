@@ -20,7 +20,7 @@ pub struct Vault {
     pub spent_in_epoch: u64, // Amount spent in current epoch
     #[max_len(5)]
     pub guardians: Vec<Pubkey>, // List of guardian public keys
-    pub guardians_threshold: u8, // Min signatures required (e.g. 2)
+    pub threshold: u8,       // Min signatures required for recovery (e.g. 2)
     // pub guardian_votes: Vec<Pubkey>,
     // pub proposed_new_owner: Option<Pubkey>,
     pub treasury: Pubkey, //Account holding sol
@@ -29,10 +29,12 @@ pub struct Vault {
 
 // Recovery request account
 #[account]
+#[derive(InitSpace)]
 pub struct RecoveryRequest {
-    pub vault_owner: Pubkey,           // User whose vault is being recovered
-    pub guardians_signed: Vec<Pubkey>, // Guardians who have approved
-    pub new_owner: Option<Pubkey>,     // New owner if ownership is being transferred
-    pub created_at: i64,               // When request was created
-    pub bump: u8,                      // PDA bump
+    pub vault: Pubkey,     // The vault being recovered
+    pub new_owner: Pubkey, // New owner if ownership is being transferred
+    #[max_len(5)]
+    pub signers: Vec<bool>, // Guardians who have approved(parllel to vault.guardians)
+    pub executed: bool,    // Boolean ensuring one time execution
+    pub created_at: i64,   // When request was created
 }

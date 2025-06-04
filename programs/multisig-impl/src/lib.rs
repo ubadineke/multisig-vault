@@ -36,4 +36,13 @@ pub mod multisig_impl {
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64, destination: Pubkey) -> Result<()> {
         Withdraw::handler(ctx, amount, destination)
     }
+
+    pub fn initiate_recovery(ctx: Context<InitiateRecovery>, new_owner: Pubkey) -> Result<()> {
+        InitiateRecovery::handler(ctx, new_owner)
+    }
+
+    pub fn approve_recovery(ctx: Context<ApproveRecovery> ) -> Result<()> {
+        ApproveRecovery::handler(ctx)
+    }
+
 }
