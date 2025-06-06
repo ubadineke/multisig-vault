@@ -3,6 +3,7 @@ import { Program } from "@coral-xyz/anchor";
 import { MultisigImpl } from "../target/types/multisig_impl";
 import { PublicKey, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { assert, expect } from "chai";
+import { Clock, LiteSVM } from "litesvm";
 
 describe("multisig-impl", () => {
   // Configure the client to use the local cluster.
@@ -10,6 +11,24 @@ describe("multisig-impl", () => {
   const provider = anchor.AnchorProvider.env();
   const program = anchor.workspace.multisigImpl as Program<MultisigImpl>;
 
+
+  const newProvider = new anchor.AnchorProvider{
+    
+  }
+  const svm = new LiteSVM();
+  const currentClock = svm.getClock();
+  console.log(`Current Clock ${currentClock.epoch.toString()}`);
+  const newClock = new Clock(
+    currentClock.slot,
+    currentClock.epoch + 1n,
+    currentClock.epochStartTimestamp + 1000n,
+    currentClock.leaderScheduleEpoch,
+    currentClock.unixTimestamp + 1000n // optional: to match epoch bump
+  );
+
+  svm.setClock(newClock);
+  const newestClock = svm.getClock();
+  console.log(`New Clockk,, ${newestClock.epoch}`);
   // Test accounts
   const admin = anchor.web3.Keypair.generate();
   const vaultOwner = anchor.web3.Keypair.generate(); //owns/creates a vault
@@ -17,6 +36,9 @@ describe("multisig-impl", () => {
   const guardian1 = anchor.web3.Keypair.generate();
   const guardian2 = anchor.web3.Keypair.generate();
   const guardian3 = anchor.web3.Keypair.generate();
+
+  let epochLimit = new anchor.BN(1 * LAMPORTS_PER_SOL);
+  let maxGuardians = 5;
 
   let configPda;
   let vaultPda;
@@ -62,13 +84,13 @@ describe("multisig-impl", () => {
 
     //AIRDROP ACCOUNTS
     await airdropSOL(admin.publicKey, 5);
-    await airdropSOL(vaultOwner.publicKey, 2);
+    await airdropSOL(vaultOwner.publicKey, 4);
     await airdropSOL(guardian1.publicKey, 1);
   });
 
   it("initializes config successfully", async () => {
     await program.methods
-      .initializeConfig(new anchor.BN(1 * 1_000_000_000), 5)
+      .initializeConfig(epochLimit, maxGuardians)
       .accounts({
         config: configPda,
         admin: admin.publicKey,
@@ -94,10 +116,10 @@ describe("multisig-impl", () => {
       .rpc();
 
     const vault = await program.account.vault.fetch(vaultPda);
-    assert.equal(vault.owner.toString(), vaultOwner.publicKey.toString());
-    assert.equal(vault.guardians.length, 3);
-    assert.equal(vault.threshold, 2);
-    assert.equal(vault.balance.toNumber(), 0);
+    assert.strictEqual(vault.owner.toString(), vaultOwner.publicKey.toString());
+    assert.strictEqual(vault.guardians.length, 3);
+    assert.strictEqual(vault.threshold, 2);
+    assert.strictEqual(vault.balance.toNumber(), 0);
   });
 
   it("funds the vault with SOL", async () => {
@@ -105,8 +127,7 @@ describe("multisig-impl", () => {
     const initialBalance = await provider.connection.getBalance(
       initialVaultState.treasury
     );
-    // const fundAmount = anchor.web3.LAMPORTS_PER_SOL; // 1 SOL
-    const fundAmount = new anchor.BN(1_000_000_000);
+    const fundAmount = new anchor.BN(2_000_000_000);
 
     await program.methods
       .fundVault(fundAmount)
@@ -120,7 +141,7 @@ describe("multisig-impl", () => {
 
     // Check vault balance increased
     const vault = await program.account.vault.fetch(vaultPda);
-    assert.equal(vault.balance.toString(), fundAmount.toString());
+    assert.strictEqual(vault.balance.toString(), fundAmount.toString());
 
     // Check lamports were transferred
     const newBalance = await provider.connection.getBalance(vault.treasury);
@@ -131,6 +152,10 @@ describe("multisig-impl", () => {
     const initialRecipientBalance = await provider.connection.getBalance(
       recipient.publicKey
     );
+
+    const initialVaultBalance = (await program.account.vault.fetch(vaultPda)).balance;
+
+    console.log(`initial recipient balance ${initialRecipientBalance}`);
 
     const withdrawAmount = new anchor.BN(0.5 * LAMPORTS_PER_SOL);
 
@@ -148,9 +173,10 @@ describe("multisig-impl", () => {
 
     // Check vault balance decreased
     const vault = await program.account.vault.fetch(vaultPda);
-    assert.equal(
-      vault.balance.toString(),
-      (LAMPORTS_PER_SOL - withdrawAmount.toNumber()).toString()
+    console.log(`Vault balance ${vault.balance.toString()}`);
+    assert.strictEqual(
+      vault.balance.toNumber(),
+      initialVaultBalance.toNumber() - withdrawAmount.toNumber()
     );
 
     console.log(`Existing Vault owner: ${vault.owner}`);
@@ -163,6 +189,27 @@ describe("multisig-impl", () => {
     );
   });
 
+  it("fails to withdraw beyond epoch limit", async () => {
+    const overLimit = new anchor.BN(3 * LAMPORTS_PER_SOL);
+
+    try {
+      await program.methods
+        .withdraw(overLimit, recipient.publicKey)
+        .accounts({
+          vault: vaultPda,
+          owner: vaultOwner.publicKey,
+          destination: recipient.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([vaultOwner])
+        .rpc();
+      assert.fail("Should have failed");
+    } catch (err) {
+      assert.include(err.message, "WithdrawalLimitExceeded");
+    }
+  });
+
+  //Guardian Recovery Test
   it("initiates recovery request", async () => {
     recoveryRequestPda = derivePDA(["recovery", vaultPda]);
 
@@ -180,8 +227,8 @@ describe("multisig-impl", () => {
       .rpc();
 
     const request = await program.account.recoveryRequest.fetch(recoveryRequestPda);
-    assert.equal(request.vault.toString(), vaultPda.toString());
-    assert.equal(request.newOwner.toString(), recipient.publicKey.toString());
+    assert.strictEqual(request.vault.toString(), vaultPda.toString());
+    assert.strictEqual(request.newOwner.toString(), recipient.publicKey.toString());
     assert.isFalse(request.executed);
   });
 
@@ -228,7 +275,7 @@ describe("multisig-impl", () => {
     const vault = await program.account.vault.fetch(vaultPda);
 
     assert.isTrue(request.executed);
-    assert.equal(vault.owner.toString(), recipient.publicKey.toString());
+    assert.strictEqual(vault.owner.toString(), recipient.publicKey.toString());
   });
 
   // it("combines partial signatures for request approval", async () => {
