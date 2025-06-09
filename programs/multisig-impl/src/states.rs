@@ -21,9 +21,7 @@ pub struct Vault {
     #[max_len(5)]
     pub guardians: Vec<Pubkey>, // List of guardian public keys
     pub threshold: u8,       // Min signatures required for recovery (e.g. 2)
-    // pub guardian_votes: Vec<Pubkey>,
-    // pub proposed_new_owner: Option<Pubkey>,
-    pub treasury: Pubkey, //Account holding sol
+    pub treasury: Pubkey,    //Account holding sol
     pub bump: u8,
 }
 

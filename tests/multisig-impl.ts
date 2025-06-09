@@ -11,24 +11,6 @@ describe("multisig-impl", () => {
   const provider = anchor.AnchorProvider.env();
   const program = anchor.workspace.multisigImpl as Program<MultisigImpl>;
 
-
-  const newProvider = new anchor.AnchorProvider{
-    
-  }
-  const svm = new LiteSVM();
-  const currentClock = svm.getClock();
-  console.log(`Current Clock ${currentClock.epoch.toString()}`);
-  const newClock = new Clock(
-    currentClock.slot,
-    currentClock.epoch + 1n,
-    currentClock.epochStartTimestamp + 1000n,
-    currentClock.leaderScheduleEpoch,
-    currentClock.unixTimestamp + 1000n // optional: to match epoch bump
-  );
-
-  svm.setClock(newClock);
-  const newestClock = svm.getClock();
-  console.log(`New Clockk,, ${newestClock.epoch}`);
   // Test accounts
   const admin = anchor.web3.Keypair.generate();
   const vaultOwner = anchor.web3.Keypair.generate(); //owns/creates a vault
@@ -278,58 +260,19 @@ describe("multisig-impl", () => {
     assert.strictEqual(vault.owner.toString(), recipient.publicKey.toString());
   });
 
-  // it("combines partial signatures for request approval", async () => {
-  //   console.log(`Guardian1 ${guardian1.publicKey}`);
-  //   console.log(`Guardian2 ${guardian2.publicKey}`);
-  //   // 1. Prepare unsigned approval transaction
-  //   const approvalIx = await program.methods
-  //     .approveRecovery()
-  //     .accounts({
-  //       recoveryRequest: recoveryRequestPda,
-  //       vault: vaultPda,
-  //       guardian: guardian1.publicKey,
-  //     })
-  //     .instruction();
+  // Advance Epoch to Test
+  const svm = new LiteSVM();
+  const currentClock = svm.getClock();
+  console.log(`Current Clock ${currentClock.epoch.toString()}`);
+  const newClock = new Clock(
+    currentClock.slot,
+    currentClock.epoch + 1n,
+    currentClock.epochStartTimestamp + 1000n,
+    currentClock.leaderScheduleEpoch,
+    currentClock.unixTimestamp + 1000n
+  );
 
-  //   const tx = new anchor.web3.Transaction().add(approvalIx);
-  //   tx.feePayer = guardian1.publicKey;
-  //   tx.recentBlockhash = (await provider.connection.getRecentBlockhash()).blockhash;
-
-  //   tx.signatures = [
-  //     {
-  //       publicKey: guardian1.publicKey,
-  //       signature: null,
-  //     },
-  //     {
-  //       publicKey: guardian2.publicKey,
-  //       signature: null,
-  //     },
-  //   ];
-
-  //   // 2. Serialize for guardian1 to sign (offline simulation)
-  //   const serializedTx = tx.serialize({
-  //     requireAllSignatures: false,
-  //     verifySignatures: false,
-  //   });
-  //   const txForGuardian1 = anchor.web3.Transaction.from(serializedTx);
-
-  //   // 3. Guardian1 signs
-  //   txForGuardian1.partialSign(guardian1);
-  //   const guardian1Signed = txForGuardian1.serialize();
-
-  //   // 4. Pass to guardian2 for signing
-  //   const txForGuardian2 = anchor.web3.Transaction.from(guardian1Signed);
-  //   txForGuardian2.partialSign(guardian2);
-  //   const fullySignedTx = txForGuardian2.serialize();
-
-  //   // 5. Submit combined transaction
-  //   const txId = await provider.connection.sendRawTransaction(fullySignedTx);
-  //   await provider.connection.confirmTransaction(txId);
-
-  //   // Verify execution (threshold met)
-  //   const request = await program.account.recoveryRequest.fetch(recoveryRequestPda);
-  //   assert.isTrue(request.executed);
-  //   assert.isTrue(request.signers[0]); // guardian1
-  //   assert.isTrue(request.signers[1]); // guardian2
-  // });
+  svm.setClock(newClock);
+  const newestClock = svm.getClock();
+  console.log(`New Clock Epoch, ${newestClock.epoch}`);
 });

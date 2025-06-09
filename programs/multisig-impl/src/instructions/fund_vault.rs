@@ -46,7 +46,7 @@ impl FundVault<'_> {
             &[],
         )?;
 
-        // Update vault balance (in our accounting)
+        // Update vault balance
         let vault = &mut ctx.accounts.vault;
         vault.balance = vault
             .balance

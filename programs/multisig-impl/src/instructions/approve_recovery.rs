@@ -5,17 +5,14 @@ use anchor_lang::prelude::*;
 pub struct ApproveRecovery<'info> {
     #[account(mut, has_one = vault)]
     pub recovery_request: Account<'info, RecoveryRequest>,
-    #[account(
-        mut,
-        // constraint = vault.recovery_set_seqno == recovery_request.recovery_set_seqno
-    )]
+    #[account(mut)]
     pub vault: Account<'info, Vault>,
     #[account(signer)]
     pub guardian: Signer<'info>,
 }
 
 impl ApproveRecovery<'_> {
-    pub fn handler (ctx: Context<ApproveRecovery>) -> Result<()> {
+    pub fn handler(ctx: Context<ApproveRecovery>) -> Result<()> {
         let recovery_request = &mut ctx.accounts.recovery_request;
         let vault = &mut ctx.accounts.vault;
 

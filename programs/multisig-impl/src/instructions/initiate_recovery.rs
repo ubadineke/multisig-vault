@@ -37,7 +37,6 @@ impl InitiateRecovery<'_> {
             .position(|g| g == ctx.accounts.guardian.key)
             .ok_or(RecoveryError::NotGuardian)?;
 
-        // Mark that guardian as signed
         signers[index] = true;
 
         // Set recovery request data
@@ -46,7 +45,6 @@ impl InitiateRecovery<'_> {
         recovery_request.signers = signers;
         recovery_request.executed = false;
         recovery_request.created_at = Clock::get()?.unix_timestamp;
-        // recovery_request.recovery_set_seqno = vault.recovery_set_seqno;
 
         emit!(RecoveryInitiated {
             vault: vault.key(),

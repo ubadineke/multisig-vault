@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
 
-// Error Codes
 #[error_code]
 pub enum VaultError {
     #[msg("Too many or no guardians provided")]

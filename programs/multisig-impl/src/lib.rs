@@ -41,8 +41,7 @@ pub mod multisig_impl {
         InitiateRecovery::handler(ctx, new_owner)
     }
 
-    pub fn approve_recovery(ctx: Context<ApproveRecovery> ) -> Result<()> {
+    pub fn approve_recovery(ctx: Context<ApproveRecovery>) -> Result<()> {
         ApproveRecovery::handler(ctx)
     }
-
 }
